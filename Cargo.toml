@@ -1,0 +1,18 @@
+[package]
+name = "aur-fetch"
+version = "0.1.0"
+authors = ["morganamilo <morganamilo@gmail.com>"]
+edition = "2018"
+
+description = "A libary for downloading and diffing AUR packages"
+homepage = "http://github.com/Morganamilo/aur-fetch.rs"
+repository = "http://github.com/Morganamilo/aur-fetch.rs"
+documentation = "https://docs.rs/aur_fetch"
+license = "GPL-3.0"
+keywords = ["archlinux", "pkgbuild", "arch", "aur"]
+
+[dependencies]
+url = "1.7"
+tokio-process = "0.2.3"
+futures = "0.1.25"
+tempdir = "0.3.7"
