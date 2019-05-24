@@ -263,6 +263,14 @@ impl Handle {
     }
 }
 
+fn color_str(color: bool) -> &'static str {
+    if color {
+        "--color=always"
+    } else {
+        "--color=never"
+    }
+}
+
 fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, args: &[&str]) -> Result<Output> {
     let output = Command::new(git.as_ref())
         .current_dir(path.as_ref())
@@ -295,20 +303,12 @@ fn git_needs_merge<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<b
 }
 
 fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Result<Output> {
-    let color = if color {
-        "--color=always"
-    } else {
-        "--color=never"
-    };
+    let color = color_str(color);
     Ok(git_command(git, path, &["log", "..HEAD@{u}", color])?)
 }
 
 fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Result<Output> {
-    let color = if color {
-        "--color=always"
-    } else {
-        "--color=never"
-    };
+    let color = color_str(color);
     git_command(&git, &path, &["reset", "--hard", "HEAD"])?;
     git_command(
         &git,
