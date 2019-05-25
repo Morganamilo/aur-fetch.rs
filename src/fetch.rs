@@ -157,6 +157,8 @@ impl Handle {
 
     /// Diff a list of packages returning the diffs as strings.
     ///
+    /// Diffing a package that is already up to date will generate a diff against an empty git tree
+    ///
     /// Additionally this function gives you the ability to force color. This is useful if you
     /// intend to print the diffs to stdout.
     pub fn diff<S: AsRef<str>>(&self, pkgs: &[S], color: bool) -> Result<Vec<String>> {
@@ -176,6 +178,8 @@ impl Handle {
     }
 
     /// Diff a list of packages and save them to diff_dir.
+    ///
+    /// Diffing a package that is already up to date will generate a diff against an empty git tree
     pub fn save_diffs<S: AsRef<str>>(&self, pkgs: &[S]) -> Result<()> {
         self.mk_diff_dir()?;
 
@@ -309,24 +313,39 @@ fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Res
 
 fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Result<Output> {
     let color = color_str(color);
+    let needs_merge = git_needs_merge(&git, &path)?;
     git_command(&git, &path, &["reset", "--hard", "HEAD"])?;
-    git_command(
-        &git,
-        &path,
-        &[
-            "-c",
-            "user.email=aur",
-            "-c",
-            "user.name=aur",
-            "merge",
-            "--no-edit",
-            "--no-ff",
-            "--no-commit",
-        ],
-    )?;
-    Ok(git_command(
-        &git,
-        &path,
-        &["diff", "--stat", "--patch", "--cached", color],
-    )?)
+    if needs_merge {
+        git_command(
+            &git,
+            &path,
+            &[
+                "-c",
+                "user.email=aur",
+                "-c",
+                "user.name=aur",
+                "merge",
+                "--no-edit",
+                "--no-ff",
+                "--no-commit",
+            ],
+        )?;
+        Ok(git_command(
+            &git,
+            &path,
+            &["diff", "--stat", "--patch", "--cached", color],
+        )?)
+    } else {
+        Ok(git_command(
+            &git,
+            &path,
+            &[
+                "diff",
+                "--stat",
+                "--patch",
+                "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD",
+                color,
+            ],
+        )?)
+    }
 }
