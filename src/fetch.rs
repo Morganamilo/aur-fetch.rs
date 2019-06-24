@@ -1,4 +1,4 @@
-use crate::{Callback, Error};
+use crate::{Callback, CommandFailed, Error};
 
 use std::cell::RefCell;
 use std::env;
@@ -101,12 +101,13 @@ impl Handle {
         let pkgs = pkgs.iter().map(|pkg| {
             let mut url = self.aur_url.clone();
             let pkg = pkg.as_ref();
+            let is_git_repo = self.is_git_repo(pkg);
             url.set_path(pkg.as_ref());
 
-            let command = if self.is_git_repo(pkg) {
+            let command = if is_git_repo {
                 fetched.push(pkg);
                 Command::new(&self.git)
-                    .current_dir(&self.clone_dir.join(pkg))
+                    .current_dir(&self.clone_dir.join(&pkg))
                     .args(&["fetch", "-v"])
                     .output_async()
             } else {
@@ -124,13 +125,28 @@ impl Handle {
             command.then(move |r| {
                 let mut n = n.borrow_mut();
                 *n += 1;
-                f(Callback { pkg, n: *n });
+                f(Callback {
+                    pkg: pkg.clone(),
+                    n: *n,
+                });
                 let r = r.map_err(Error::from);
 
                 match r {
-                    Ok(ref o) if !o.status.success() => future::err(Error::CommandFailed(
-                        String::from_utf8_lossy(&o.stderr).into(),
-                    )),
+                    Ok(ref o) if !o.status.success() => future::err(if is_git_repo {
+                        Error::CommandFailed(CommandFailed {
+                            dir: self.clone_dir.join(&pkg),
+                            command: self.git.clone(),
+                            args: vec!["fetch".into(), "-v".into()],
+                            stderr: String::from_utf8_lossy(&o.stderr).into(),
+                        })
+                    } else {
+                        Error::CommandFailed(CommandFailed {
+                            dir: self.clone_dir.clone(),
+                            command: self.git.clone(),
+                            args: vec!["clone".into(), "--noprogress".into(), url.to_string()],
+                            stderr: String::from_utf8_lossy(&o.stderr).into(),
+                        })
+                    }),
                     _ => future::result(r),
                 }
             })
@@ -284,9 +300,12 @@ fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, args: &[&str]) 
     if output.status.success() {
         Ok(output)
     } else {
-        Err(Error::CommandFailed(
-            String::from_utf8_lossy(&output.stderr).into(),
-        ))
+        Err(Error::CommandFailed(CommandFailed {
+            dir: path.as_ref().into(),
+            command: git.as_ref().into(),
+            args: args.iter().map(|s| s.to_string()).collect(),
+            stderr: String::from_utf8_lossy(&output.stderr).into(),
+        }))
     }
 }
 

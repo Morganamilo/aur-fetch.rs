@@ -1,12 +1,45 @@
 use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::io;
+use std::path::PathBuf;
+
+/// Info for a command that exited non 0.
+#[derive(Debug, Clone)]
+pub struct CommandFailed {
+    /// The current working directory of the command ran.
+    pub dir: PathBuf,
+    /// The command that was ran.
+    pub command: PathBuf,
+    /// Args passed to the command that was ran.
+    pub args: Vec<String>,
+    /// The stderr from the command ran.
+    pub stderr: String,
+}
+
+impl Display for CommandFailed {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(
+            fmt,
+            "command failed: {}: {}",
+            self.dir.display(),
+            self.command.display()
+        )?;
+        for arg in &self.args {
+            write!(fmt, " {}", arg)?;
+        }
+        write!(
+            fmt,
+            ":\n    {}",
+            &self.stderr.trim().replace("\n", "\n    ")
+        )
+    }
+}
 
 /// The error type for this crate.
 #[derive(Debug)]
 pub enum Error {
-    /// A command failed to run. Stderr is captured.
-    CommandFailed(String),
+    /// A command exited with non 0.
+    CommandFailed(CommandFailed),
     /// An io error occurred.
     Io(io::Error),
 }
@@ -16,7 +49,7 @@ impl Display for Error {
         use Error::*;
 
         match self {
-            CommandFailed(e) => write!(fmt, "command failed: {}", e.trim()),
+            CommandFailed(e) => e.fmt(fmt),
             Io(e) => e.fmt(fmt),
         }
     }
