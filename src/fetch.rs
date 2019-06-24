@@ -315,14 +315,20 @@ fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<Output
 }
 
 fn git_needs_merge<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
-    let output = git_command(git, path, &["rev-parse", "HEAD", "HEAD@{u}"])?;
-    let s = String::from_utf8_lossy(&output.stdout);
-    let mut s = s.split('\n');
+    git_command(&git, &path, &["rev-parse"])?;
+    let output = git_command(git, path, &["rev-parse", "HEAD", "HEAD@{u}"]);
 
-    let head = s.next().unwrap();
-    let upstream = s.next().unwrap();
+    if let Ok(output) = output {
+        let s = String::from_utf8_lossy(&output.stdout);
+        let mut s = s.split('\n');
 
-    Ok(head != upstream)
+        let head = s.next().unwrap();
+        let upstream = s.next().unwrap();
+
+        Ok(head != upstream)
+    } else {
+        Ok(false)
+    }
 }
 
 fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Result<Output> {
