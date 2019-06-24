@@ -23,11 +23,11 @@ impl Display for Error {
 }
 
 impl error::Error for Error {
-    fn cause(&self) -> Option<&dyn error::Error> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         use Error::*;
 
         match self {
-            Io(e) => Some(e),
+            Io(e) => e.source(),
             _ => None,
         }
     }
