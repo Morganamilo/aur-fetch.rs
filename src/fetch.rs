@@ -118,23 +118,19 @@ impl Handle {
             };
 
             // bad, need to learn how to use futures properly
-            let pkg = pkg.to_string();
             let f = f.clone();
             let n = n.clone();
 
             command.then(move |r| {
                 let mut n = n.borrow_mut();
                 *n += 1;
-                f(Callback {
-                    pkg: pkg.clone(),
-                    n: *n,
-                });
+                f(Callback { pkg, n: *n });
                 let r = r.map_err(Error::from);
 
                 match r {
                     Ok(ref o) if !o.status.success() => future::err(if is_git_repo {
                         Error::CommandFailed(CommandFailed {
-                            dir: self.clone_dir.join(&pkg),
+                            dir: self.clone_dir.join(pkg),
                             command: self.git.clone(),
                             args: vec!["fetch".into(), "-v".into()],
                             stderr: String::from_utf8_lossy(&o.stderr).into(),

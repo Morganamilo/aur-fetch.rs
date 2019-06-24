@@ -1,8 +1,8 @@
 /// Callback called whenever a download completes.
 #[derive(Debug)]
-pub struct Callback {
+pub struct Callback<'a> {
     /// The name of the package that completed.
-    pub pkg: String,
+    pub pkg: &'a str,
     /// The amount of packages that have finished downloading.
     pub n: usize,
 }
