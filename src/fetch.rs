@@ -52,29 +52,29 @@ impl Handle {
     ///
     /// clone_dir will be a subdirectory named clone inside of the specified path.
     /// diff_dir will be a subdirectory named diff inside of the specified path.
-    pub fn with_cache_dir<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let path = path.as_ref().canonicalize()?;
+    pub fn with_cache_dir<P: AsRef<Path>>(path: P) -> Self {
+        let path = path.as_ref();
 
-        Ok(Self {
+        Self {
             clone_dir: path.join("clone"),
             diff_dir: path.join("diff"),
             git: "git".into(),
             aur_url: "https://aur.archlinux.org".parse().unwrap(),
-        })
+        }
     }
 
     /// Create a new handle with a specified cache dir.
     ///
     ///Both diffs and cloned packages will be places in the provided dir.
-    pub fn with_combined_cache_dir<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let path = path.as_ref().canonicalize()?;
+    pub fn with_combined_cache_dir<P: AsRef<Path>>(path: P) -> Self {
+        let path = path.as_ref();
 
-        Ok(Self {
-            clone_dir: path.clone(),
-            diff_dir: path,
+        Self {
+            clone_dir: path.into(),
+            diff_dir: path.into(),
             git: "git".into(),
             aur_url: "https://aur.archlinux.org".parse().unwrap(),
-        })
+        }
     }
 
     /// Downloads a list of packages to the cache dir.
