@@ -13,7 +13,7 @@ pub struct CommandFailed {
     /// Args passed to the command that was ran.
     pub args: Vec<String>,
     /// The stderr from the command ran.
-    pub stderr: String,
+    pub stderr: Option<String>,
 }
 
 impl Display for CommandFailed {
@@ -27,11 +27,15 @@ impl Display for CommandFailed {
         for arg in &self.args {
             write!(fmt, " {}", arg)?;
         }
-        write!(
-            fmt,
-            ":\n    {}",
-            &self.stderr.trim().replace("\n", "\n    ")
-        )
+        if let Some(stderr) = &self.stderr {
+            write!(
+                fmt,
+                ":\n    {}",
+                &stderr.trim().replace("\n", "\n    ")
+            )
+        } else {
+            Ok(())
+        }
     }
 }
 

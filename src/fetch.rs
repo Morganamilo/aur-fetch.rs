@@ -147,14 +147,14 @@ impl Handle {
                             dir: self.clone_dir.join(pkg),
                             command: self.git.clone(),
                             args: vec!["fetch".into(), "-v".into()],
-                            stderr: String::from_utf8_lossy(&o.stderr).into(),
+                            stderr: Some(String::from_utf8_lossy(&o.stderr).into()),
                         })
                     } else {
                         Error::CommandFailed(CommandFailed {
                             dir: self.clone_dir.clone(),
                             command: self.git.clone(),
                             args: vec!["clone".into(), "--noprogress".into(), url.to_string()],
-                            stderr: String::from_utf8_lossy(&o.stderr).into(),
+                            stderr: Some(String::from_utf8_lossy(&o.stderr).into()),
                         })
                     }),
                     _ => future::result(r),
@@ -202,6 +202,16 @@ impl Handle {
 
         Ok(ret)
     }
+
+    /// Diff a single package.
+    ///
+    /// Relies on `git diff` for printing. This means output will likley be coloured and ran through less.
+    /// Although this is dependent on the user's git config
+    pub fn print_diff<S: AsRef<str>>(&self, pkg: S) -> Result<()> {
+        show_git_diff(&self.git, self.clone_dir.join(pkg.as_ref()))
+    }
+
+
 
     /// Diff a list of packages and save them to diff_dir.
     ///
@@ -314,7 +324,26 @@ fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, args: &[&str]) 
             dir: path.as_ref().into(),
             command: git.as_ref().into(),
             args: args.iter().map(|s| s.to_string()).collect(),
-            stderr: String::from_utf8_lossy(&output.stderr).into(),
+            stderr: Some(String::from_utf8_lossy(&output.stderr).into()),
+        }))
+    }
+}
+
+fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, args: &[&str]) -> Result<()> {
+    let status = Command::new(git.as_ref())
+        .current_dir(path.as_ref())
+        .args(args)
+        .spawn()?
+        .wait()?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(Error::CommandFailed(CommandFailed {
+            dir: path.as_ref().into(),
+            command: git.as_ref().into(),
+            args: args.iter().map(|s| s.to_string()).collect(),
+            stderr: None,
         }))
     }
 }
@@ -383,4 +412,43 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Re
             ],
         )?)
     }
+}
+
+fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<()> {
+    let needs_merge = git_needs_merge(&git, &path)?;
+    git_command(&git, &path, &["reset", "--hard", "HEAD"])?;
+    if needs_merge {
+        git_command(
+            &git,
+            &path,
+            &[
+                "-c",
+                "user.email=aur",
+                "-c",
+                "user.name=aur",
+                "merge",
+                "--no-edit",
+                "--no-ff",
+                "--no-commit",
+            ],
+        )?;
+        show_git_command(
+            &git,
+            &path,
+            &["diff", "--stat", "--patch", "--cached"],
+        )?;
+    } else {
+        show_git_command(
+            &git,
+            &path,
+            &[
+                "diff",
+                "--stat",
+                "--patch",
+                "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD",
+            ],
+        )?;
+    }
+
+    Ok(())
 }
