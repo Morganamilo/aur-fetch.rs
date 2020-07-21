@@ -13,6 +13,6 @@ keywords = ["archlinux", "pkgbuild", "arch", "aur"]
 
 [dependencies]
 url = "1.7"
-tokio-process = "0.2.3"
-futures = "0.1.25"
 tempdir = "0.3.7"
+tokio = { version = "0.2.21", features = ["process"] }
+futures = "0.3.5"

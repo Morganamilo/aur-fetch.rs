@@ -1,6 +1,6 @@
 use crate::{Callback, CommandFailed, Error};
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, File};
@@ -10,9 +10,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::rc::Rc;
 
-use futures::future::{self, Future};
+use futures::future::try_join_all;
+
 use tempdir::TempDir;
-use tokio_process::CommandExt;
+use tokio::process::Command as AsyncCommand;
 use url::Url;
 
 /// Result type for this crate;
@@ -105,65 +106,98 @@ impl Handle {
         pkgs: &'a [S],
         f: F,
     ) -> Result<Vec<&'a str>> {
-        let mut fetched = Vec::new();
-        self.mk_clone_dir()?;
+        let pkgs = pkgs.iter().map(|p| p.as_ref()).collect::<Vec<_>>();
+        let pkgs = Rc::new(RefCell::new(pkgs));
+        let n = Rc::new(Cell::new(0));
 
-        // bad, need to learn how to use futures properly
-        let f = Rc::new(f);
-        let n = Rc::new(RefCell::new(0));
+        let mut rt = tokio::runtime::Runtime::new()?;
 
-        let pkgs = pkgs.iter().map(|pkg| {
-            let mut url = self.aur_url.clone();
-            let pkg = pkg.as_ref();
-            let is_git_repo = self.is_git_repo(pkg);
-            url.set_path(pkg.as_ref());
+        let pkgs = rt.block_on(async {
+            let futures = (0..16).map(|_| self.pkg_sink(pkgs.clone(), &f, n.clone()));
+            try_join_all(futures).await
+        })?;
 
-            let command = if is_git_repo {
-                fetched.push(pkg);
-                Command::new(&self.git)
-                    .current_dir(&self.clone_dir.join(&pkg))
-                    .args(&["fetch", "-v"])
-                    .output_async()
-            } else {
-                Command::new(&self.git)
-                    .current_dir(&self.clone_dir)
-                    .args(&["clone", "--no-progress", url.as_str()])
-                    .output_async()
-            };
+        Ok(pkgs.into_iter().flatten().collect())
+    }
 
-            // bad, need to learn how to use futures properly
-            let f = f.clone();
-            let n = n.clone();
+    async fn pkg_sink<'a, F: Fn(Callback)>(
+        &self,
+        pkgs: Rc<RefCell<Vec<&'a str>>>,
+        f: &F,
+        n: Rc<Cell<usize>>,
+    ) -> Result<Vec<&'a str>> {
+        let mut ret = Vec::new();
 
-            command.then(move |r| {
-                let mut n = n.borrow_mut();
-                *n += 1;
-                f(Callback { pkg, n: *n });
-                let r = r.map_err(Error::from);
+        loop {
+            let mut borrow = pkgs.borrow_mut();
 
-                match r {
-                    Ok(ref o) if !o.status.success() => future::err(if is_git_repo {
-                        Error::CommandFailed(CommandFailed {
-                            dir: self.clone_dir.join(pkg),
-                            command: self.git.clone(),
-                            args: vec!["fetch".into(), "-v".into()],
-                            stderr: Some(String::from_utf8_lossy(&o.stderr).into()),
-                        })
-                    } else {
-                        Error::CommandFailed(CommandFailed {
-                            dir: self.clone_dir.clone(),
-                            command: self.git.clone(),
-                            args: vec!["clone".into(), "--noprogress".into(), url.to_string()],
-                            stderr: Some(String::from_utf8_lossy(&o.stderr).into()),
-                        })
-                    }),
-                    _ => future::result(r),
+            if let Some(pkg) = borrow.pop() {
+                drop(borrow);
+                if self.download_pkg(pkg, f, n.clone()).await? {
+                    ret.push(pkg);
                 }
-            })
-        });
+            } else {
+                break;
+            }
+        }
 
-        future::join_all(pkgs).wait()?;
-        Ok(fetched)
+        Ok(ret)
+    }
+
+    async fn download_pkg<'a, S: AsRef<str>, F: Fn(Callback)>(
+        &self,
+        pkg: S,
+        f: &F,
+        n: Rc<Cell<usize>>,
+    ) -> Result<bool> {
+        self.mk_clone_dir()?;
+        let mut fetched = false;
+
+        let mut url = self.aur_url.clone();
+        let pkg = pkg.as_ref();
+        url.set_path(pkg.as_ref());
+
+        let is_git_repo = self.is_git_repo(pkg);
+        let command = if is_git_repo {
+            fetched = true;
+            AsyncCommand::new(&self.git)
+                .current_dir(&self.clone_dir.join(pkg))
+                .args(&["fetch", "-v"])
+                .output()
+        } else {
+            AsyncCommand::new(&self.git)
+                .current_dir(&self.clone_dir)
+                .args(&["clone", "--no-progress", url.as_str()])
+                .output()
+        };
+
+        let pkg = pkg.to_string();
+
+        let output = command.await?;
+        if !output.status.success() {
+            if is_git_repo {
+                Err(Error::CommandFailed(CommandFailed {
+                    dir: self.clone_dir.join(pkg),
+                    command: self.git.clone(),
+                    args: vec!["fetch".into(), "-v".into()],
+                    stderr: Some(String::from_utf8_lossy(&output.stderr).into()),
+                }))
+            } else {
+                Err(Error::CommandFailed(CommandFailed {
+                    dir: self.clone_dir.clone(),
+                    command: self.git.clone(),
+                    args: vec!["clone".into(), "--noprogress".into(), url.to_string()],
+                    stderr: Some(String::from_utf8_lossy(&output.stderr).into()),
+                }))
+            }
+        } else {
+            n.set(n.get() + 1);
+            f(Callback {
+                pkg: &pkg,
+                n: n.get(),
+            });
+            Ok(fetched)
+        }
     }
 
     /// Filters a list of packages, keeping ones that need to be merged.
@@ -210,8 +244,6 @@ impl Handle {
     pub fn print_diff<S: AsRef<str>>(&self, pkg: S) -> Result<()> {
         show_git_diff(&self.git, self.clone_dir.join(pkg.as_ref()))
     }
-
-
 
     /// Diff a list of packages and save them to diff_dir.
     ///
@@ -432,11 +464,7 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<()>
                 "--no-commit",
             ],
         )?;
-        show_git_command(
-            &git,
-            &path,
-            &["diff", "--stat", "--patch", "--cached"],
-        )?;
+        show_git_command(&git, &path, &["diff", "--stat", "--patch", "--cached"])?;
     } else {
         show_git_command(
             &git,
