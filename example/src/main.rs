@@ -22,7 +22,7 @@ fn run() -> Result<(), Error> {
     pb.set_prefix("Downloading Packages");
 
     let fetched = h.download_cb(&pkgs, |cb| {
-        pb.println(format!(":: {}", cb.pkg));
+        pb.println(format!(":: {}", cb.output));
         pb.inc(1);
     })?;
 

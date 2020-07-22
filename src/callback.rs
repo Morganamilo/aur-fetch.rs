@@ -5,4 +5,6 @@ pub struct Callback<'a> {
     pub pkg: &'a str,
     /// The amount of packages that have finished downloading.
     pub n: usize,
+    /// Output of the git command called to download the package.
+    pub output: &'a str,
 }
