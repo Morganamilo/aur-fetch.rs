@@ -195,6 +195,7 @@ impl Handle {
             f(Callback {
                 pkg: &pkg,
                 n: n.get(),
+                output: &String::from_utf8_lossy(&output.stderr),
             });
             Ok(fetched)
         }
