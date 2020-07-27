@@ -12,7 +12,7 @@ license = "GPL-3.0"
 keywords = ["archlinux", "pkgbuild", "arch", "aur"]
 
 [dependencies]
-url = "1.7"
+url = "2.1.1"
 tempdir = "0.3.7"
-tokio = { version = "0.2.21", features = ["process"] }
+tokio = { version = "0.2.22", features = ["process"] }
 futures = "0.3.5"
