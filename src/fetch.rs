@@ -313,11 +313,21 @@ impl Handle {
 
     /// Merge a list of packages with their upstream.
     pub fn merge<S: AsRef<str>>(&self, pkgs: &[S]) -> Result<()> {
+        self.merge_cb(pkgs, |_| ())
+    }
+
+    /// Merge a list of packages with their upstream, calling callback for each merge.
+    pub fn merge_cb<S: AsRef<str>, F: Fn(Callback)>(&self, pkgs: &[S], cb: F) -> Result<()> {
         let pkgs = pkgs.iter();
 
-        for pkg in pkgs {
+        for (n, pkg) in pkgs.enumerate() {
             let path = self.clone_dir.join(pkg.as_ref());
-            git_rebase(&self.git, path)?;
+            let output = git_rebase(&self.git, path)?;
+            cb(Callback {
+                pkg: pkg.as_ref(),
+                n,
+                output: String::from_utf8_lossy(&output.stdout).trim(),
+            });
         }
 
         Ok(())
@@ -383,7 +393,7 @@ fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, args: &[&s
 
 fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<Output> {
     git_command(&git, &path, &["reset", "--hard", "-q", "HEAD"])?;
-    Ok(git_command(&git, &path, &["rebase"])?)
+    Ok(git_command(&git, &path, &["rebase", "--stat"])?)
 }
 
 fn git_needs_merge<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
