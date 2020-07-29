@@ -19,3 +19,4 @@ futures = "0.3.5"
 
 [features]
 view = ["tempdir"]
+default = ["view"]

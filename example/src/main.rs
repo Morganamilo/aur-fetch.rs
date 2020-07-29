@@ -29,11 +29,9 @@ fn run() -> Result<(), Error> {
 
         pb.finish();
 
-        let merge = h.needs_merge(&fetched)?;
-
-        if !merge.is_empty() {
+        if !fetched.is_empty() {
             println!();
-            let pb = ProgressBar::new(merge.len() as u64);
+            let pb = ProgressBar::new(fetched.len() as u64);
             pb.set_style(
                 ProgressStyle::default_bar()
                     .template(" {prefix} [{wide_bar}] {pos}/{len} ")
@@ -41,7 +39,7 @@ fn run() -> Result<(), Error> {
             );
             pb.set_prefix("Merging Packages");
 
-            h.merge_cb(&merge, |cb| {
+            h.merge_cb(&fetched, |cb| {
                 pb.println(cb.output);
                 pb.inc(1);
             })?;

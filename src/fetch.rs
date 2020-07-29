@@ -9,6 +9,7 @@ use std::io::{self, Write};
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+
 use std::rc::Rc;
 
 use futures::future::try_join_all;
@@ -17,6 +18,8 @@ use futures::future::try_join_all;
 use tempdir::TempDir;
 use tokio::process::Command as AsyncCommand;
 use url::Url;
+
+static SEEN: &str = "AUR_SEEN";
 
 /// Result type for this crate;
 pub type Result<T> = std::result::Result<T, Error>;
@@ -203,14 +206,29 @@ impl Handle {
         }
     }
 
-    /// Filters a list of packages, keeping ones that need to be merged.
+    /// Filters a list of packages, keep ones that have a diff.
     ///
-    /// Needing to be merged is defined as the current HEAD being different to the upstram HEAD.
-    pub fn needs_merge<'a, S: AsRef<str>>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
+    /// A reoo has a diff if AUR_SEEN is defined and is different to the upstram HEAD.
+    pub fn has_diff<'a, S: AsRef<str>>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
         let mut ret = Vec::new();
 
         for pkg in pkgs {
-            if git_needs_merge(&self.git, self.clone_dir.join(pkg.as_ref()))? {
+            if git_has_diff(&self.git, self.clone_dir.join(pkg.as_ref()))? {
+                ret.push(pkg.as_ref());
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Filterrs a list of packages, keeping ones that have not yet been seen.
+    ///
+    /// A repo is seen if AUR_SEEN exists and is equal to the upstram HEAD.
+    pub fn unseen<'a, S: AsRef<str>>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
+        let mut ret = Vec::new();
+
+        for pkg in pkgs {
+            if git_unseen(&self.git, self.clone_dir.join(pkg.as_ref()))? {
                 ret.push(pkg.as_ref());
             }
         }
@@ -336,6 +354,18 @@ impl Handle {
         Ok(())
     }
 
+    /// Marks a list of repos as seen.
+    ///
+    /// This updates AUR_SEEN to the upstream HEAD
+    pub fn mark_seen<S: AsRef<str>>(&self, pkgs: &[S]) -> Result<()> {
+        for pkg in pkgs {
+            let path = self.clone_dir.join(pkg.as_ref());
+            git_mark_seen(&self.git, path)?;
+        }
+
+        Ok(())
+    }
+
     fn is_git_repo<S: AsRef<str>>(&self, pkg: S) -> bool {
         self.clone_dir.join(pkg.as_ref()).join(".git").is_dir()
     }
@@ -394,16 +424,47 @@ fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, args: &[&s
     }
 }
 
+fn git_mark_seen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<Output> {
+    Ok(git_command(&git, &path, &["update-ref", SEEN, "HEAD"])?)
+}
+
 fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<Output> {
     git_command(&git, &path, &["reset", "--hard", "-q", "HEAD"])?;
     Ok(git_command(&git, &path, &["rebase", "--stat"])?)
 }
 
-fn git_needs_merge<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
-    git_command(&git, &path, &["rev-parse"])?;
-    let output = git_command(git, path, &["rev-parse", "HEAD", "HEAD@{u}"]);
+/*fn git_needs_merge<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
+    let output = git_command(git, path, &["rev-parse", "HEAD", "HEAD@{u}"])?;
 
-    if let Ok(output) = output {
+    let s = String::from_utf8_lossy(&output.stdout);
+    let mut s = s.split('\n');
+
+    let head = s.next().unwrap();
+    let upstream = s.next().unwrap();
+
+    Ok(head != upstream)
+}*/
+
+fn git_unseen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
+    if git_has_seen(&git, &path)? {
+        let output = git_command(git, path, &["rev-parse", "HEAD", SEEN])?;
+
+        let s = String::from_utf8_lossy(&output.stdout);
+        let mut s = s.split('\n');
+
+        let head = s.next().unwrap();
+        let seen = s.next().unwrap();
+
+        Ok(head != seen)
+    } else {
+        Ok(false)
+    }
+}
+
+fn git_has_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
+    if git_has_seen(&git, &path)? {
+        let output = git_command(git, path, &["rev-parse", "SEEN", "HEAD@{u}"])?;
+
         let s = String::from_utf8_lossy(&output.stdout);
         let mut s = s.split('\n');
 
@@ -421,11 +482,15 @@ fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Res
     Ok(git_command(git, path, &["log", "..HEAD@{u}", color])?)
 }
 
+fn git_has_seen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
+    let output = git_command(&git, &path, &["rev-parse", "--verify", SEEN])?;
+    Ok(output.status.success())
+}
+
 fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Result<Output> {
     let color = color_str(color);
-    let needs_merge = git_needs_merge(&git, &path)?;
-    git_command(&git, &path, &["reset", "--hard", "HEAD"])?;
-    if needs_merge {
+    if git_has_seen(&git, &path)? {
+        git_command(&git, &path, &["reset", "--hard", SEEN])?;
         git_command(
             &git,
             &path,
@@ -453,7 +518,7 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Re
                 "diff",
                 "--stat",
                 "--patch",
-                "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD",
+                "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD@{u}",
                 color,
             ],
         )?)
@@ -461,9 +526,8 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, color: bool) -> Re
 }
 
 fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<()> {
-    let needs_merge = git_needs_merge(&git, &path)?;
-    git_command(&git, &path, &["reset", "--hard", "HEAD"])?;
-    if needs_merge {
+    if git_has_seen(&git, &path)? {
+        git_command(&git, &path, &["reset", "--hard", SEEN])?;
         git_command(
             &git,
             &path,
@@ -487,7 +551,7 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<()>
                 "diff",
                 "--stat",
                 "--patch",
-                "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD",
+                "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD@{u}",
             ],
         )?;
     }
