@@ -89,15 +89,14 @@ impl Handle {
     /// that already exist in cache will be fetched. Merging will need to be done in a separate
     /// step.
     ///
-    /// Each package is downloaded concurrently which givess a major speedup. No other functions
-    /// are run concirrently as they will all complete pretty much isntantly.
+    /// Each package is downloaded concurrently which givess a major speedup
     ///
     /// Depending on how many packages are being downloaded and connection speed this
     /// function may take a little while to complete. See [`download_cb`](fn.download_cb.html) if
     /// you wish track the progress of each download.
     ///
     /// This also filters the input list to packages that were already in cache. This filtered list
-    /// can then be passed on to [`needs_merge`](fn.needs_merge.html) as freshly cloned packages will
+    /// can then be passed on to [`merge`](fn.merge.html) as freshly cloned packages will
     /// not need to be merged.
     pub fn download<'a, S: AsRef<str>>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
         self.download_cb(pkgs, |_| ())
@@ -432,18 +431,6 @@ fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<Output
     git_command(&git, &path, &["reset", "--hard", "-q", "HEAD"])?;
     Ok(git_command(&git, &path, &["rebase", "--stat"])?)
 }
-
-/*fn git_needs_merge<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
-    let output = git_command(git, path, &["rev-parse", "HEAD", "HEAD@{u}"])?;
-
-    let s = String::from_utf8_lossy(&output.stdout);
-    let mut s = s.split('\n');
-
-    let head = s.next().unwrap();
-    let upstream = s.next().unwrap();
-
-    Ok(head != upstream)
-}*/
 
 fn git_unseen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P) -> Result<bool> {
     if git_has_seen(&git, &path)? {

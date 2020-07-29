@@ -25,24 +25,19 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let feteched = fetch.download(&pkgs)?;
+//! let fetched = fetch.download(&pkgs)?;
 //!
-//! // Filter the fetched packages to ones that need to be merged.
-//! let to_merge = fetch.needs_merge(&pkgs)?;
+//! // Merge changes
+//! fetch.merge(&fetched)?;
+//!
+//! // Only diff packages that have not been reviewed
+//! let to_diff = fetch.unseen(&pkgs)?;
 //!
 //! // Print each diff
-//! // Note that these are only diffs of packages that were cloned already. Meaning newly cloned
-//! // packages are unveted. For sake of example we are not covering new files.
-//! for (diff, pkg) in fetch.diff(&to_merge, true)?.iter().zip(pkgs.iter()) {
+//! for (diff, pkg) in fetch.diff(&to_diff, true)?.iter().zip(pkgs.iter()) {
 //!     println!("{}:", pkg);
 //!     println!("{}", diff.trim());
 //! }
-//!
-//! // Merge the changes.
-//! // In a real tool you would ask for user conformation before this
-//! // As long as the changes are not merged this process can always be restarted and the diffs
-//! // perserved
-//! fetch.merge(&to_merge)?;
 //!
 //! # Ok(())
 //! # }
@@ -62,20 +57,17 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let feteched = fetch.download(&pkgs)?;
-//!
-//! // Filter the fetched packages to ones that need to be merged.
-//! let to_merge = fetch.needs_merge(&pkgs)?;
-//!
-//! // Save diffs to cache.
-//! fetch.save_diffs(&to_merge)?;
-//!
-//! // Make a view of the new files so we can easily see them in the file browser
-//! let dir = fetch.make_view(&pkgs, &to_merge)?;
-//! Command::new("vifm").arg(dir.path()).spawn()?.wait()?;
+//! let fetched = fetch.download(&pkgs)?;
 //!
 //! // Merge the changes.
-//! fetch.merge(&to_merge)?;
+//! fetch.merge(&fetched)?;
+//!
+//! // Save diffs to cache.
+//! fetch.save_diffs(&fetched)?;
+//!
+//! // Make a view of the new files so we can easily see them in the file browser
+//! let dir = fetch.make_view(&pkgs, &fetched)?;
+//! Command::new("vifm").arg(dir.path()).spawn()?.wait()?;
 //!
 //! # Ok(())
 //! # }
@@ -102,14 +94,11 @@
 //!     println!("Downloaded ({:0pad$}/{:0pad$}): {}", cb.n, pkgs.len(), cb.pkg, pad = 3);
 //! })?;
 //!
-//! // Filter the fetched packages to ones that need to be merged.
-//! let to_merge = fetch.needs_merge(&pkgs)?;
-//!
 //! // Merge the changes.
 //! // In a real tool you would ask for user conformation before this
 //! // As long as the changes are not merged this process can always be restarted and the diffs
 //! // perserved
-//! fetch.merge(&to_merge)?;
+//! fetch.merge(&fetched)?;
 //!
 //! # Ok(())
 //! # }
