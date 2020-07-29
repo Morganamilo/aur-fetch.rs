@@ -5,6 +5,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, File};
 use std::io::{self, Write};
+#[cfg(feature = "view")]
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -12,6 +13,7 @@ use std::rc::Rc;
 
 use futures::future::try_join_all;
 
+#[cfg(feature = "view")]
 use tempdir::TempDir;
 use tokio::process::Command as AsyncCommand;
 use url::Url;
@@ -272,6 +274,7 @@ impl Handle {
     /// for packages that have diffs.
     ///
     /// Files are symlinked from the cache dirs so there is no duplication of files.
+    #[cfg(feature = "view")]
     pub fn make_view<S1: AsRef<str>, S2: AsRef<str>>(
         &self,
         pkgs: &[S1],
