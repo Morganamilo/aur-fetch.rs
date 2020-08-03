@@ -361,10 +361,10 @@ impl Handle {
     /// Marks a list of repos as seen.
     ///
     /// This updates AUR_SEEN to the upstream HEAD
-    pub fn mark_seen<S: AsRef<str>>(&self, flags: &[String], pkgs: &[S]) -> Result<()> {
+    pub fn mark_seen<S: AsRef<str>>(&self, pkgs: &[S]) -> Result<()> {
         for pkg in pkgs {
             let path = self.clone_dir.join(pkg.as_ref());
-            git_mark_seen(&self.git, flags, path)?;
+            git_mark_seen(&self.git, &self.git_flags, path)?;
         }
 
         Ok(())
@@ -459,7 +459,7 @@ fn git_unseen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P
 
 fn git_has_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<bool> {
     if git_has_seen(&git, flags, &path)? {
-        let output = git_command(git, path, flags, &["rev-parse", "SEEN", "HEAD@{u}"])?;
+        let output = git_command(git, path, flags, &["rev-parse", SEEN, "HEAD@{u}"])?;
 
         let s = String::from_utf8_lossy(&output.stdout);
         let mut s = s.split('\n');
@@ -479,8 +479,8 @@ fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P, c
 }
 
 fn git_has_seen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<bool> {
-    let output = git_command(&git, &path, flags, &["rev-parse", "--verify", SEEN])?;
-    Ok(output.status.success())
+    let output = git_command(&git, &path, flags, &["rev-parse", "--verify", SEEN]).is_ok();
+    Ok(output)
 }
 
 fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P, color: bool) -> Result<Output> {
