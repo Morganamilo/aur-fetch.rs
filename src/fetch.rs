@@ -453,7 +453,7 @@ fn git_unseen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P
 
         Ok(head != seen)
     } else {
-        Ok(false)
+        Ok(true)
     }
 }
 
