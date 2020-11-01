@@ -195,7 +195,12 @@ impl Handle {
                 Err(Error::CommandFailed(CommandFailed {
                     dir: self.clone_dir.clone(),
                     command: self.git.clone(),
-                    args: vec!["clone".into(), "--noprogress".into(), "--".into(), url.to_string()],
+                    args: vec![
+                        "clone".into(),
+                        "--noprogress".into(),
+                        "--".into(),
+                        url.to_string(),
+                    ],
                     stderr: Some(String::from_utf8_lossy(&output.stderr).into()),
                 }))
             }
@@ -217,7 +222,11 @@ impl Handle {
         let mut ret = Vec::new();
 
         for pkg in pkgs {
-            if git_has_diff(&self.git, &self.git_flags, self.clone_dir.join(pkg.as_ref()))? {
+            if git_has_diff(
+                &self.git,
+                &self.git_flags,
+                self.clone_dir.join(pkg.as_ref()),
+            )? {
                 ret.push(pkg.as_ref());
             }
         }
@@ -232,7 +241,11 @@ impl Handle {
         let mut ret = Vec::new();
 
         for pkg in pkgs {
-            if git_unseen(&self.git,  &self.git_flags,  self.clone_dir.join(pkg.as_ref()))? {
+            if git_unseen(
+                &self.git,
+                &self.git_flags,
+                self.clone_dir.join(pkg.as_ref()),
+            )? {
                 ret.push(pkg.as_ref());
             }
         }
@@ -251,9 +264,19 @@ impl Handle {
         let mut ret = Vec::new();
 
         for pkg in pkgs {
-            let output = git_log(&self.git,  &self.git_flags,  self.clone_dir.join(pkg.as_ref()), color)?;
+            let output = git_log(
+                &self.git,
+                &self.git_flags,
+                self.clone_dir.join(pkg.as_ref()),
+                color,
+            )?;
             let mut s: String = String::from_utf8_lossy(&output.stdout).into();
-            let output = git_diff(&self.git, &self.git_flags,  self.clone_dir.join(pkg.as_ref()), color)?;
+            let output = git_diff(
+                &self.git,
+                &self.git_flags,
+                self.clone_dir.join(pkg.as_ref()),
+                color,
+            )?;
             s.push_str(&String::from_utf8_lossy(&output.stdout));
             s.push('\n');
             ret.push(s);
@@ -267,7 +290,11 @@ impl Handle {
     /// Relies on `git diff` for printing. This means output will likley be coloured and ran through less.
     /// Although this is dependent on the user's git config
     pub fn print_diff<S: AsRef<str>>(&self, pkg: S) -> Result<()> {
-        show_git_diff(&self.git, &self.git_flags,  self.clone_dir.join(pkg.as_ref()))
+        show_git_diff(
+            &self.git,
+            &self.git_flags,
+            self.clone_dir.join(pkg.as_ref()),
+        )
     }
 
     /// Diff a list of packages and save them to diff_dir.
@@ -282,9 +309,25 @@ impl Handle {
 
             let mut file = File::create(path)?;
 
-            file.write_all(&git_log(&self.git,   &self.git_flags, self.clone_dir.join(pkg.as_ref()), false)?.stdout)?;
+            file.write_all(
+                &git_log(
+                    &self.git,
+                    &self.git_flags,
+                    self.clone_dir.join(pkg.as_ref()),
+                    false,
+                )?
+                .stdout,
+            )?;
             file.write_all(&[b'\n'])?;
-            file.write_all(&git_diff(&self.git, &self.git_flags, self.clone_dir.join(pkg.as_ref()), false)?.stdout)?;
+            file.write_all(
+                &git_diff(
+                    &self.git,
+                    &self.git_flags,
+                    self.clone_dir.join(pkg.as_ref()),
+                    false,
+                )?
+                .stdout,
+            )?;
         }
 
         Ok(())
@@ -391,7 +434,12 @@ fn color_str(color: bool) -> &'static str {
     }
 }
 
-fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, flags: &[String], args: &[&str]) -> Result<Output> {
+fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    path: P,
+    flags: &[String],
+    args: &[&str],
+) -> Result<Output> {
     let output = Command::new(git.as_ref())
         .current_dir(path.as_ref())
         .args(flags)
@@ -411,7 +459,12 @@ fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, flags: &[String
     }
 }
 
-fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, flags: &[String], args: &[&str]) -> Result<()> {
+fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    path: P,
+    flags: &[String],
+    args: &[&str],
+) -> Result<()> {
     let status = Command::new(git.as_ref())
         .current_dir(path.as_ref())
         .args(flags)
@@ -432,11 +485,24 @@ fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, path: P, flags: &[S
     }
 }
 
-fn git_mark_seen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<Output> {
-    Ok(git_command(&git, &path, flags, &["update-ref", SEEN, "HEAD"])?)
+fn git_mark_seen<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+) -> Result<Output> {
+    Ok(git_command(
+        &git,
+        &path,
+        flags,
+        &["update-ref", SEEN, "HEAD"],
+    )?)
 }
 
-fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<Output> {
+fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+) -> Result<Output> {
     git_command(&git, &path, flags, &["reset", "--hard", "-q", "HEAD"])?;
     Ok(git_command(&git, &path, flags, &["rebase", "--stat"])?)
 }
@@ -457,7 +523,11 @@ fn git_unseen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P
     }
 }
 
-fn git_has_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<bool> {
+fn git_has_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+) -> Result<bool> {
     if git_has_seen(&git, flags, &path)? {
         let output = git_command(git, path, flags, &["rev-parse", SEEN, "HEAD@{u}"])?;
 
@@ -473,17 +543,36 @@ fn git_has_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path:
     }
 }
 
-fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P, color: bool) -> Result<Output> {
+fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+    color: bool,
+) -> Result<Output> {
     let color = color_str(color);
-    Ok(git_command(git, path, flags, &["log", "..HEAD@{u}", color])?)
+    Ok(git_command(
+        git,
+        path,
+        flags,
+        &["log", "..HEAD@{u}", color],
+    )?)
 }
 
-fn git_has_seen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<bool> {
+fn git_has_seen<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+) -> Result<bool> {
     let output = git_command(&git, &path, flags, &["rev-parse", "--verify", SEEN]).is_ok();
     Ok(output)
 }
 
-fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P, color: bool) -> Result<Output> {
+fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+    color: bool,
+) -> Result<Output> {
     let color = color_str(color);
     if git_has_seen(&git, flags, &path)? {
         git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
@@ -542,7 +631,12 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path
                 "--no-commit",
             ],
         )?;
-        show_git_command(&git, &path, flags, &["diff", "--stat", "--patch", "--cached"])?;
+        show_git_command(
+            &git,
+            &path,
+            flags,
+            &["diff", "--stat", "--patch", "--cached"],
+        )?;
     } else {
         show_git_command(
             &git,
