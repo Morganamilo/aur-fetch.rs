@@ -509,15 +509,14 @@ fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(
 
 fn git_unseen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<bool> {
     if git_has_seen(&git, flags, &path)? {
-        let output = git_command(git, path, flags, &["rev-parse", "HEAD", SEEN])?;
-
-        let s = String::from_utf8_lossy(&output.stdout);
-        let mut s = s.split('\n');
-
-        let head = s.next().unwrap();
-        let seen = s.next().unwrap();
-
-        Ok(head != seen)
+        let is_unseen = git_command(
+            git,
+            path,
+            flags,
+            &["merge-base", "--is-ancestor", "HEAD@{u}", "AUR_SEEN"],
+        )
+        .is_err();
+        Ok(is_unseen)
     } else {
         Ok(true)
     }
@@ -567,6 +566,16 @@ fn git_has_seen<S: AsRef<OsStr>, P: AsRef<Path>>(
     Ok(output)
 }
 
+fn git_head<S: AsRef<OsStr>, P: AsRef<Path>>(
+git: S,
+    flags: &[String],
+    path: P,
+) -> Result<String> {
+        let output = git_command(git, path, flags, &["rev-parse", "HEAD"])?;
+        let output = String::from_utf8_lossy(&output.stdout);
+        Ok(output.trim().to_string())
+}
+
 fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
     git: S,
     flags: &[String],
@@ -574,8 +583,9 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
     color: bool,
 ) -> Result<Output> {
     let color = color_str(color);
-    if git_has_seen(&git, flags, &path)? {
-        git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
+    let head = git_head(&git, &flags, &path)?;
+    git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
+    let output = if git_has_seen(&git, flags, &path)? {
         git_command(
             &git,
             &path,
@@ -610,10 +620,15 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
                 color,
             ],
         )?)
-    }
+    };
+
+    git_command(&git, &path, flags, &["reset", "--hard", &head])?;
+    output
 }
 
 fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<()> {
+
+    let head = git_head(&git, &flags, &path)?;
     if git_has_seen(&git, flags, &path)? {
         git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
         git_command(
@@ -651,5 +666,6 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path
         )?;
     }
 
+    git_command(&git, &path, flags, &["reset", "--hard", &head])?;
     Ok(())
 }
