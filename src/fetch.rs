@@ -15,7 +15,7 @@ use std::rc::Rc;
 use futures::future::try_join_all;
 
 #[cfg(feature = "view")]
-use tempdir::TempDir;
+use tempfile::{Builder, TempDir};
 use tokio::process::Command as AsyncCommand;
 use url::Url;
 
@@ -345,7 +345,7 @@ impl Handle {
         pkgs: &[S1],
         diffs: &[S2],
     ) -> Result<TempDir> {
-        let tmp = TempDir::new("aur")?;
+        let tmp = Builder::new().prefix("aur").tempdir()?;
 
         for pkg in diffs {
             let dest = tmp.path().join(pkg.as_ref()).with_extension("diff");
