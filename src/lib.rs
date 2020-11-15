@@ -17,7 +17,7 @@
 //! use aur_fetch::Handle;
 //!
 //! # use aur_fetch::Error;
-//! # fn main() -> Result<(), Error> {
+//! # async fn foo() -> Result<(), Error> {
 //!
 //! let pkgs = vec!["discord", "spotify", "pacman-git"];
 //!
@@ -25,7 +25,7 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let fetched = fetch.download(&pkgs)?;
+//! let fetched = fetch.download(&pkgs).await?;
 //!
 //! // Merge changes
 //! fetch.merge(&fetched)?;
@@ -49,7 +49,7 @@
 //! use std::process::Command;
 //!
 //! # use aur_fetch::Error;
-//! # fn main() -> Result<(), Error> {
+//! # async fn foo() -> Result<(), Error> {
 //!
 //! let pkgs = vec!["discord", "spotify", "pacman-git"];
 //!
@@ -57,7 +57,7 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let fetched = fetch.download(&pkgs)?;
+//! let fetched = fetch.download(&pkgs).await?;
 //!
 //! // Merge the changes.
 //! fetch.merge(&fetched)?;
@@ -79,7 +79,7 @@
 //! use aur_fetch::Handle;
 //!
 //! # use aur_fetch::Error;
-//! # fn main() -> Result<(), Error> {
+//! # async fn foo() -> Result<(), Error> {
 //!
 //! let pkgs = vec!["discord", "spotify", "pacman-git"];
 //!
@@ -87,12 +87,12 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let feteched = fetch.download(&pkgs)?;
+//! let feteched = fetch.download(&pkgs).await?;
 //!
 //! // Download the packages, printing downloads as they complete.
 //! let fetched = fetch.download_cb(&pkgs, |cb| {
 //!     println!("Downloaded ({:0pad$}/{:0pad$}): {}", cb.n, pkgs.len(), cb.pkg, pad = 3);
-//! })?;
+//! }).await?;
 //!
 //! // Merge the changes.
 //! // In a real tool you would ask for user conformation before this

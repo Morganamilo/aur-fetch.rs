@@ -103,14 +103,14 @@ impl Handle {
     /// This also filters the input list to packages that were already in cache. This filtered list
     /// can then be passed on to [`merge`](fn.merge.html) as freshly cloned packages will
     /// not need to be merged.
-    pub fn download<'a, S: AsRef<str>>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
-        self.download_cb(pkgs, |_| ())
+    pub async fn download<'a, S: AsRef<str>>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
+        self.download_cb(pkgs, |_| ()).await
     }
 
     /// The same as [`download`](fn.download.html) but calls a Callback after each download.
     ///
     /// The callback is called each time a package download is completed.
-    pub fn download_cb<'a, S: AsRef<str>, F: Fn(Callback)>(
+    pub async fn download_cb<'a, S: AsRef<str>, F: Fn(Callback)>(
         &self,
         pkgs: &'a [S],
         f: F,
@@ -118,14 +118,8 @@ impl Handle {
         let pkgs = pkgs.iter().map(|p| p.as_ref()).collect::<Vec<_>>();
         let pkgs = Rc::new(RefCell::new(pkgs));
         let n = Rc::new(Cell::new(0));
-
-        let mut rt = tokio::runtime::Runtime::new()?;
-
-        let pkgs = rt.block_on(async {
-            let futures = (0..16).map(|_| self.pkg_sink(pkgs.clone(), &f, n.clone()));
-            try_join_all(futures).await
-        })?;
-
+        let futures = (0u8..16).map(|_| self.pkg_sink(pkgs.clone(), &f, n.clone()));
+        let pkgs = try_join_all(futures).await?;
         Ok(pkgs.into_iter().flatten().collect())
     }
 
@@ -566,14 +560,10 @@ fn git_has_seen<S: AsRef<OsStr>, P: AsRef<Path>>(
     Ok(output)
 }
 
-fn git_head<S: AsRef<OsStr>, P: AsRef<Path>>(
-git: S,
-    flags: &[String],
-    path: P,
-) -> Result<String> {
-        let output = git_command(git, path, flags, &["rev-parse", "HEAD"])?;
-        let output = String::from_utf8_lossy(&output.stdout);
-        Ok(output.trim().to_string())
+fn git_head<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<String> {
+    let output = git_command(git, path, flags, &["rev-parse", "HEAD"])?;
+    let output = String::from_utf8_lossy(&output.stdout);
+    Ok(output.trim().to_string())
 }
 
 fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
@@ -627,7 +617,6 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
 }
 
 fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<()> {
-
     let head = git_head(&git, &flags, &path)?;
     if git_has_seen(&git, flags, &path)? {
         git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
