@@ -2,13 +2,14 @@ use aur_fetch::{Error, Handle};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
 
-fn main() {
-    if let Err(err) = run() {
+#[tokio::main]
+async fn main() {
+    if let Err(err) = run().await {
         eprintln!("{}", err);
     }
 }
 
-fn run() -> Result<(), Error> {
+async fn run() -> Result<(), Error> {
     let h = Handle::new()?;
     let args = env::args();
     let pkgs = args.skip(1).collect::<Vec<_>>();
@@ -25,7 +26,7 @@ fn run() -> Result<(), Error> {
         let fetched = h.download_cb(&pkgs, |cb| {
             pb.println(cb.output);
             pb.inc(1);
-        })?;
+        }).await?;
 
         pb.finish();
 

@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 indicatif = "0.15.0"
 aur-fetch = { path = "../" }
+tokio = { version = "0.2", features = ["macros"] }
