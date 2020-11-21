@@ -342,15 +342,18 @@ impl Handle {
         let tmp = Builder::new().prefix("aur").tempdir()?;
 
         for pkg in diffs {
-            let dest = tmp.path().join(pkg.as_ref()).with_extension("diff");
-            let src = self.diff_dir.join(pkg.as_ref()).with_extension("diff");
+            let pkg = format!("{}.diff", pkg.as_ref());
+            let dest = tmp.path().join(&pkg);
+            let src = self.diff_dir.join(&pkg);
             if src.is_file() {
                 symlink(src, &dest)?;
             }
         }
 
         for pkg in pkgs {
-            let mut dest = tmp.path().join(pkg.as_ref());
+            let dest = tmp.path().join(pkg.as_ref());
+            let pkgbuild_dest = tmp.path().join(format!("{}.PKGBUILD", pkg.as_ref()));
+            let srcinfo_dest = tmp.path().join(format!("{}.SRCINFO", pkg.as_ref()));
 
             let src = self.clone_dir.join(pkg.as_ref());
             if src.is_dir() {
@@ -358,15 +361,13 @@ impl Handle {
             }
 
             let src = self.clone_dir.join(pkg.as_ref()).join("PKGBUILD");
-            dest.set_extension("PKGBUILD");
             if src.is_file() {
-                symlink(src, &dest)?;
+                symlink(src, &pkgbuild_dest)?;
             }
 
-            let src = self.clone_dir.join(pkg.as_ref()).join("SRCINFO");
-            dest.set_extension("SRCINFO");
+            let src = self.clone_dir.join(pkg.as_ref()).join(".SRCINFO");
             if src.is_file() {
-                symlink(src, &dest)?;
+                symlink(src, &srcinfo_dest)?;
             }
         }
 
