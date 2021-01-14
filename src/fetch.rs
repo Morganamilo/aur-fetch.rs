@@ -596,7 +596,7 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
             &git,
             &path,
             flags,
-            &["diff", "--stat", "--patch", "--cached", color],
+            &["diff", "--stat", "--patch", "--cached", "--", ":!.SRCINFO", color],
         )?)
     } else {
         Ok(git_command(
@@ -608,6 +608,8 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
                 "--stat",
                 "--patch",
                 "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD@{u}",
+                "--",
+                ":!.SRCINFO",
                 color,
             ],
         )?)
@@ -640,7 +642,7 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path
             &git,
             &path,
             flags,
-            &["diff", "--stat", "--patch", "--cached"],
+            &["diff", "--stat", "--patch", "--cached", "--", ":!.SRCINFO"],
         )?;
     } else {
         show_git_command(
@@ -652,6 +654,8 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path
                 "--stat",
                 "--patch",
                 "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD@{u}",
+                "--",
+                ":!.SRCINFO",
             ],
         )?;
     }
