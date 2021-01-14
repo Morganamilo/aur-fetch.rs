@@ -640,7 +640,7 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path
             &git,
             &path,
             flags,
-            &["diff", "--stat", "--patch", "--cached"],
+            &["diff", "--stat", "--patch", "--cached", ":!.SRCINFO"],
         )?;
     } else {
         show_git_command(
