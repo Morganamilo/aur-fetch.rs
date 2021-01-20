@@ -575,8 +575,8 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
 ) -> Result<Output> {
     let color = color_str(color);
     let head = git_head(&git, &flags, &path)?;
-    git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
     let output = if git_has_seen(&git, flags, &path)? {
+        git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
         git_command(
             &git,
             &path,
@@ -596,7 +596,7 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
             &git,
             &path,
             flags,
-            &["diff", "--stat", "--patch", "--cached", "--", ":!.SRCINFO", color],
+            &["diff", "--stat", "--patch", "--cached", color, "--", ":!.SRCINFO"],
         )?)
     } else {
         Ok(git_command(
@@ -607,10 +607,10 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
                 "diff",
                 "--stat",
                 "--patch",
+                color,
                 "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD@{u}",
                 "--",
                 ":!.SRCINFO",
-                color,
             ],
         )?)
     };
