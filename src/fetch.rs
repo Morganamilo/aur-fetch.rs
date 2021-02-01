@@ -191,7 +191,7 @@ impl Handle {
                     command: self.git.clone(),
                     args: vec![
                         "clone".into(),
-                        "--noprogress".into(),
+                        "--no-progress".into(),
                         "--".into(),
                         url.to_string(),
                     ],
@@ -596,7 +596,15 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
             &git,
             &path,
             flags,
-            &["diff", "--stat", "--patch", "--cached", color, "--", ":!.SRCINFO"],
+            &[
+                "diff",
+                "--stat",
+                "--patch",
+                "--cached",
+                color,
+                "--",
+                ":!.SRCINFO",
+            ],
         )?)
     } else {
         Ok(git_command(
