@@ -497,12 +497,7 @@ fn git_mark_seen<S: AsRef<OsStr>, P: AsRef<Path>>(
     flags: &[String],
     path: P,
 ) -> Result<Output> {
-    Ok(git_command(
-        &git,
-        &path,
-        flags,
-        &["update-ref", SEEN, "HEAD"],
-    )?)
+    git_command(&git, &path, flags, &["update-ref", SEEN, "HEAD"])
 }
 
 fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(
@@ -511,7 +506,7 @@ fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(
     path: P,
 ) -> Result<Output> {
     git_command(&git, &path, flags, &["reset", "--hard", "-q", "HEAD"])?;
-    Ok(git_command(&git, &path, flags, &["rebase", "--stat"])?)
+    git_command(&git, &path, flags, &["rebase", "--stat"])
 }
 
 fn git_unseen<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<bool> {
@@ -556,12 +551,7 @@ fn git_log<S: AsRef<OsStr>, P: AsRef<Path>>(
     color: bool,
 ) -> Result<Output> {
     let color = color_str(color);
-    Ok(git_command(
-        git,
-        path,
-        flags,
-        &["log", "..HEAD@{u}", color],
-    )?)
+    git_command(git, path, flags, &["log", "..HEAD@{u}", color])
 }
 
 fn git_has_seen<S: AsRef<OsStr>, P: AsRef<Path>>(
@@ -586,7 +576,7 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
     color: bool,
 ) -> Result<Output> {
     let color = color_str(color);
-    let head = git_head(&git, &flags, &path)?;
+    let head = git_head(&git, flags, &path)?;
     let output = if git_has_seen(&git, flags, &path)? {
         git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
         git_command(
@@ -640,7 +630,7 @@ fn git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(
 }
 
 fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path: P) -> Result<()> {
-    let head = git_head(&git, &flags, &path)?;
+    let head = git_head(&git, flags, &path)?;
     if git_has_seen(&git, flags, &path)? {
         git_command(&git, &path, flags, &["reset", "--hard", SEEN])?;
         git_command(
