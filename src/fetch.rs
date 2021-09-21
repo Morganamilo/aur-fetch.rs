@@ -408,6 +408,18 @@ impl Handle {
         Ok(())
     }
 
+    /// Commits changes to list of packages
+    ///
+    /// This is intended to allow saving changes made by the user after reviewing.
+    pub fn commit<S1: AsRef<str>, S2: AsRef<str>>(&self, pkgs: &[S1], message: S2) -> Result<()> {
+        for pkg in pkgs {
+            let path = self.clone_dir.join(pkg.as_ref());
+            git_commit(&self.git, &self.git_flags, path, message.as_ref())?;
+        }
+
+        Ok(())
+    }
+
     fn is_git_repo<S: AsRef<str>>(&self, pkg: S) -> bool {
         self.clone_dir.join(pkg.as_ref()).join(".git").is_dir()
     }
@@ -669,5 +681,41 @@ fn show_git_diff<S: AsRef<OsStr>, P: AsRef<Path>>(git: S, flags: &[String], path
     }
 
     git_command(&git, &path, flags, &["reset", "--hard", &head])?;
+    Ok(())
+}
+
+fn git_commit<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+    message: &str,
+) -> Result<()> {
+    let path = path.as_ref();
+    let git = git.as_ref();
+
+    let has_user = git_command(git, path, flags, &["config", "user.name"]).is_ok()
+        && git_command(git, path, flags, &["config", "user.email"]).is_ok();
+
+    if git_command(git, path, flags, &["diff", "--exit-code"]).is_err() {
+        if has_user {
+            git_command(git, path, flags, &["commit", "-am", message])?;
+        } else {
+            git_command(
+                git,
+                path,
+                flags,
+                &[
+                    "-c",
+                    "user.email=aur",
+                    "-c",
+                    "user.name=aur",
+                    "commit",
+                    "-am",
+                    "AUR",
+                ],
+            )?;
+        }
+    }
+
     Ok(())
 }
