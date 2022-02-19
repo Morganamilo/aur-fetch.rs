@@ -28,7 +28,7 @@ impl Display for CommandFailed {
             write!(fmt, " {}", arg)?;
         }
         if let Some(stderr) = &self.stderr {
-            write!(fmt, ":\n    {}", &stderr.trim().replace("\n", "\n    "))
+            write!(fmt, ":\n    {}", &stderr.trim().replace('\n', "\n    "))
         } else {
             Ok(())
         }

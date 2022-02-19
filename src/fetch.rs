@@ -166,7 +166,7 @@ impl Handle {
             for (n, msg) in fetched_rec.into_iter().enumerate() {
                 let (pkg, was_fetched, out) = msg?;
                 f(Callback {
-                    pkg: &pkg,
+                    pkg,
                     n: n + 1,
                     output: String::from_utf8_lossy(&out).trim(),
                 });
@@ -180,7 +180,7 @@ impl Handle {
         .unwrap()
     }
 
-    fn download_pkg<'a, S: AsRef<str>>(&self, pkg: S) -> Result<(bool, Vec<u8>)> {
+    fn download_pkg<S: AsRef<str>>(&self, pkg: S) -> Result<(bool, Vec<u8>)> {
         self.mk_clone_dir()?;
 
         let mut url = self.aur_url.clone();
