@@ -5,6 +5,5 @@ authors = ["morganamilo <morganamilo@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-indicatif = "0.15.0"
+indicatif = "0.16.2"
 aur-fetch = { path = "../" }
-tokio = { version = "0.2", features = ["macros"] }

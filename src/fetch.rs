@@ -1,6 +1,5 @@
 use crate::{Callback, CommandFailed, Error};
 
-use std::cell::{Cell, RefCell};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, File};
@@ -9,14 +8,11 @@ use std::io::{self, Write};
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use std::rc::Rc;
-
-use futures::future::try_join_all;
-
+use crossbeam::channel;
 #[cfg(feature = "view")]
 use tempfile::{Builder, TempDir};
-use tokio::process::Command as AsyncCommand;
 use url::Url;
 
 static SEEN: &str = "AUR_SEEN";
@@ -40,6 +36,18 @@ pub struct Handle {
     pub git_flags: Vec<String>,
     /// The AUR URL.
     pub aur_url: Url,
+}
+
+fn command_err(cmd: &Command, stderr: String) -> Error {
+    Error::CommandFailed(CommandFailed {
+        dir: cmd.get_current_dir().unwrap().to_owned(),
+        command: cmd.get_program().to_owned().into(),
+        args: cmd
+            .get_args()
+            .map(|s| s.to_string_lossy().into_owned())
+            .collect(),
+        stderr: Some(stderr),
+    })
 }
 
 impl Handle {
@@ -103,110 +111,107 @@ impl Handle {
     /// This also filters the input list to packages that were already in cache. This filtered list
     /// can then be passed on to [`merge`](fn.merge.html) as freshly cloned packages will
     /// not need to be merged.
-    pub async fn download<'a, S: AsRef<str>>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
-        self.download_cb(pkgs, |_| ()).await
+    pub fn download<'a, S: AsRef<str> + Send + Sync>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
+        self.download_cb(pkgs, |_| ())
     }
 
     /// The same as [`download`](fn.download.html) but calls a Callback after each download.
     ///
     /// The callback is called each time a package download is completed.
-    pub async fn download_cb<'a, S: AsRef<str>, F: Fn(Callback)>(
+    pub fn download_cb<'a, S: AsRef<str> + Send + Sync, F: Fn(Callback)>(
         &self,
         pkgs: &'a [S],
         f: F,
     ) -> Result<Vec<&'a str>> {
-        let pkgs = pkgs.iter().map(|p| p.as_ref()).collect::<Vec<_>>();
-        let pkgs = Rc::new(RefCell::new(pkgs));
-        let n = Rc::new(Cell::new(0));
-        let futures = (0u8..16).map(|_| self.pkg_sink(pkgs.clone(), &f, n.clone()));
-        let pkgs = try_join_all(futures).await?;
-        Ok(pkgs.into_iter().flatten().collect())
-    }
+        let (pkg_send, pkg_rec) = channel::bounded(0);
+        let (fetched_send, fetched_rec) = channel::bounded(32);
+        let f = &f;
+        let stop = &AtomicBool::new(false);
+        let mut fetched = Vec::with_capacity(pkgs.len());
 
-    async fn pkg_sink<'a, F: Fn(Callback)>(
-        &self,
-        pkgs: Rc<RefCell<Vec<&'a str>>>,
-        f: &F,
-        n: Rc<Cell<usize>>,
-    ) -> Result<Vec<&'a str>> {
-        let mut ret = Vec::new();
-
-        loop {
-            let mut borrow = pkgs.borrow_mut();
-
-            if let Some(pkg) = borrow.pop() {
-                drop(borrow);
-                if self.download_pkg(pkg, f, n.clone()).await? {
-                    ret.push(pkg);
+        crossbeam::thread::scope(|scope| {
+            scope.spawn(move |_| {
+                for pkg in pkgs {
+                    if pkg_send.send(pkg.as_ref()).is_err() {
+                        break;
+                    }
                 }
-            } else {
-                break;
-            }
-        }
+            });
 
-        Ok(ret)
+            for _ in 0..20.min(pkgs.len()) {
+                let fetched_send = fetched_send.clone();
+                let pkg_rec = pkg_rec.clone();
+                scope.spawn(move |_| {
+                    for pkg in &pkg_rec {
+                        if stop.load(Ordering::Acquire) {
+                            break;
+                        }
+                        match self.download_pkg(pkg) {
+                            Ok((fetched, out)) => {
+                                let _ = fetched_send.send(Ok((pkg, fetched, out)));
+                            }
+                            Err(e) => {
+                                stop.store(true, Ordering::Release);
+                                let _ = fetched_send.send(Err(e));
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+
+            drop(pkg_rec);
+            drop(fetched_send);
+
+            for (n, msg) in fetched_rec.into_iter().enumerate() {
+                let (pkg, was_fetched, out) = msg?;
+                f(Callback {
+                    pkg: &pkg,
+                    n: n + 1,
+                    output: String::from_utf8_lossy(&out).trim(),
+                });
+                if was_fetched {
+                    fetched.push(pkg)
+                }
+            }
+
+            Ok(fetched)
+        })
+        .unwrap()
     }
 
-    async fn download_pkg<'a, S: AsRef<str>, F: Fn(Callback)>(
-        &self,
-        pkg: S,
-        f: &F,
-        n: Rc<Cell<usize>>,
-    ) -> Result<bool> {
+    fn download_pkg<'a, S: AsRef<str>>(&self, pkg: S) -> Result<(bool, Vec<u8>)> {
         self.mk_clone_dir()?;
-        let mut fetched = false;
 
         let mut url = self.aur_url.clone();
         let pkg = pkg.as_ref();
         url.set_path(pkg.as_ref());
 
         let is_git_repo = self.is_git_repo(pkg);
-        let command = if is_git_repo {
-            fetched = true;
-            AsyncCommand::new(&self.git)
-                .current_dir(&self.clone_dir.join(pkg))
-                .args(&["fetch", "-v"])
-                .output()
+
+        let mut command = Command::new(&self.git);
+
+        let fetched = if is_git_repo {
+            command.current_dir(&self.clone_dir.join(pkg));
+            command.args(&["fetch", "-v"]);
+            true
         } else {
-            AsyncCommand::new(&self.git)
-                .current_dir(&self.clone_dir)
-                .args(&["clone", "--no-progress", "--", url.as_str()])
-                .output()
+            command.current_dir(&self.clone_dir);
+            command.args(&["clone", "--no-progress", "--", url.as_str()]);
+            false
         };
+        let output = command
+            .output()
+            .map_err(|e| command_err(&command, e.to_string()))?;
 
-        let pkg = pkg.to_string();
-
-        let output = command.await?;
         if !output.status.success() {
-            if is_git_repo {
-                Err(Error::CommandFailed(CommandFailed {
-                    dir: self.clone_dir.join(pkg),
-                    command: self.git.clone(),
-                    args: vec!["fetch".into(), "-v".into()],
-                    stderr: Some(String::from_utf8_lossy(&output.stderr).into()),
-                }))
-            } else {
-                Err(Error::CommandFailed(CommandFailed {
-                    dir: self.clone_dir.clone(),
-                    command: self.git.clone(),
-                    args: vec![
-                        "clone".into(),
-                        "--no-progress".into(),
-                        "--".into(),
-                        url.to_string(),
-                    ],
-                    stderr: Some(String::from_utf8_lossy(&output.stderr).into()),
-                }))
-            }
-        } else {
-            n.set(n.get() + 1);
-            f(Callback {
-                pkg: &pkg,
-                n: n.get(),
-                output: String::from_utf8_lossy(&output.stderr).trim(),
-            });
-            Ok(fetched)
+            return Err(command_err(
+                &command,
+                String::from_utf8_lossy(&output.stderr).into_owned(),
+            ));
         }
+
+        Ok((fetched, output.stderr))
     }
 
     /// Filters a list of packages, keep ones that have a diff.

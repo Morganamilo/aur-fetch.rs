@@ -25,7 +25,7 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let fetched = fetch.download(&pkgs).await?;
+//! let fetched = fetch.download(&pkgs)?;
 //!
 //! // Merge changes
 //! fetch.merge(&fetched)?;
@@ -57,7 +57,7 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let fetched = fetch.download(&pkgs).await?;
+//! let fetched = fetch.download(&pkgs)?;
 //!
 //! // Merge the changes.
 //! fetch.merge(&fetched)?;
@@ -87,12 +87,12 @@
 //! let fetch = Handle::new()?;
 //!
 //! // Clone/Fetch the packages.
-//! let feteched = fetch.download(&pkgs).await?;
+//! let feteched = fetch.download(&pkgs)?;
 //!
 //! // Download the packages, printing downloads as they complete.
 //! let fetched = fetch.download_cb(&pkgs, |cb| {
 //!     println!("Downloaded ({:0pad$}/{:0pad$}): {}", cb.n, pkgs.len(), cb.pkg, pad = 3);
-//! }).await?;
+//! })?;
 //!
 //! // Merge the changes.
 //! // In a real tool you would ask for user conformation before this
