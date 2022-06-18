@@ -1,6 +1,6 @@
 use crate::{Callback, CommandFailed, Error};
 
-use std::env;
+use std::env::{self, current_dir};
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, File};
 use std::io::{self, Write};
@@ -200,6 +200,7 @@ impl Handle {
             command.args(&["clone", "--no-progress", "--", url.as_str()]);
             false
         };
+        log_cmd(&command);
         let output = command
             .output()
             .map_err(|e| command_err(&command, e.to_string()))?;
@@ -452,12 +453,15 @@ fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
     flags: &[String],
     args: &[&str],
 ) -> Result<Output> {
-    let output = Command::new(git.as_ref())
+    let mut command = Command::new(git.as_ref());
+    command
         .current_dir(path.as_ref())
         .args(flags)
         .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+
+    log_cmd(&command);
+    let output = command.output()?;
 
     if output.status.success() {
         Ok(output)
@@ -477,13 +481,15 @@ fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
     flags: &[String],
     args: &[&str],
 ) -> Result<()> {
-    let status = Command::new(git.as_ref())
+    let mut command = Command::new(git.as_ref());
+    command
         .current_dir(path.as_ref())
         .args(flags)
         .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .spawn()?
-        .wait()?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+
+    log_cmd(&command);
+    let status = command.spawn()?.wait()?;
 
     if status.success() {
         Ok(())
@@ -713,4 +719,21 @@ fn git_commit<S: AsRef<OsStr>, P: AsRef<Path>>(
     }
 
     Ok(())
+}
+
+fn log_cmd(cmd: &Command) {
+    if log::log_enabled!(log::Level::Debug) {
+        let bin = cmd.get_program().to_string_lossy().to_string();
+        let args = cmd
+            .get_args()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let dir = cmd
+            .get_current_dir()
+            .map(|p| p.to_owned())
+            .unwrap_or_else(|| current_dir().unwrap_or_else(|_| "?".into()));
+        let dir = dir.display();
+        log::debug!("running: CWD={dir} {bin} {args}")
+    }
 }
