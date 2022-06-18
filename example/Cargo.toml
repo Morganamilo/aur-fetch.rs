@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 indicatif = "0.16.2"
 aur-fetch = { path = "../" }
+env_logger = "0.9.0"

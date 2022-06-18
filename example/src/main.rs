@@ -3,6 +3,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
 
 fn main() {
+    env_logger::init();
+
     if let Err(err) = run() {
         eprintln!("{}", err);
     }
