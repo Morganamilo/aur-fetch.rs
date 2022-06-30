@@ -4,15 +4,12 @@ use std::env::{self, current_dir};
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, File};
 use std::io::{self, Write};
-#[cfg(feature = "view")]
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam::channel;
-#[cfg(feature = "view")]
-use tempfile::{Builder, TempDir};
 use url::Url;
 
 static SEEN: &str = "AUR_SEEN";
@@ -335,21 +332,21 @@ impl Handle {
 
     /// Makes a view of newly downloaded files.
     ///
-    /// This view is a tmp dir containing the packages downloaded/fetched and diffs
+    /// This view is a dir containing the packages downloaded/fetched and diffs
     /// for packages that have diffs.
     ///
     /// Files are symlinked from the cache dirs so there is no duplication of files.
-    #[cfg(feature = "view")]
-    pub fn make_view<S1: AsRef<str>, S2: AsRef<str>>(
+    pub fn make_view<P: AsRef<Path>, S1: AsRef<str>, S2: AsRef<str>>(
         &self,
+        dir: P,
         pkgs: &[S1],
         diffs: &[S2],
-    ) -> Result<TempDir> {
-        let tmp = Builder::new().prefix("aur").tempdir()?;
+    ) -> Result<()> {
+        let dir = dir.as_ref();
 
         for pkg in diffs {
             let pkg = format!("{}.diff", pkg.as_ref());
-            let dest = tmp.path().join(&pkg);
+            let dest = dir.join(&pkg);
             let src = self.diff_dir.join(&pkg);
             if src.is_file() {
                 symlink(src, &dest)?;
@@ -357,9 +354,9 @@ impl Handle {
         }
 
         for pkg in pkgs {
-            let dest = tmp.path().join(pkg.as_ref());
-            let pkgbuild_dest = tmp.path().join(format!("{}.PKGBUILD", pkg.as_ref()));
-            let srcinfo_dest = tmp.path().join(format!("{}.SRCINFO", pkg.as_ref()));
+            let dest = dir.join(pkg.as_ref());
+            let pkgbuild_dest = dir.join(format!("{}.PKGBUILD", pkg.as_ref()));
+            let srcinfo_dest = dir.join(format!("{}.SRCINFO", pkg.as_ref()));
 
             let src = self.clone_dir.join(pkg.as_ref());
             if src.is_dir() {
@@ -377,7 +374,7 @@ impl Handle {
             }
         }
 
-        Ok(tmp)
+        Ok(())
     }
 
     /// Merge a list of packages with their upstream.

@@ -66,8 +66,8 @@
 //! fetch.save_diffs(&fetched)?;
 //!
 //! // Make a view of the new files so we can easily see them in the file browser
-//! let dir = fetch.make_view(&pkgs, &fetched)?;
-//! Command::new("vifm").arg(dir.path()).spawn()?.wait()?;
+//! let dir = fetch.make_view( "/tmp/aur_view",  &pkgs, &fetched)?;
+//! Command::new("vifm").arg("/tmp/aur_view").spawn()?.wait()?;
 //!
 //! # Ok(())
 //! # }
