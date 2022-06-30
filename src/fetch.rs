@@ -17,6 +17,14 @@ static SEEN: &str = "AUR_SEEN";
 /// Result type for this crate;
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Represents a git repository.
+pub struct Repo {
+    /// The url to the git repo.
+    pub url: Url,
+    /// The name of the git repo.
+    pub name: String,
+}
+
 /// Handle to the current configuration.
 ///
 /// This handle is used to configure parts of the fetching process. All the features of this crate
@@ -108,7 +116,7 @@ impl Handle {
     /// This also filters the input list to packages that were already in cache. This filtered list
     /// can then be passed on to [`merge`](fn.merge.html) as freshly cloned packages will
     /// not need to be merged.
-    pub fn download<'a, S: AsRef<str> + Send + Sync>(&self, pkgs: &'a [S]) -> Result<Vec<&'a str>> {
+    pub fn download<S: AsRef<str> + Send + Sync>(&self, pkgs: &[S]) -> Result<Vec<String>> {
         self.download_cb(pkgs, |_| ())
     }
 
@@ -119,33 +127,56 @@ impl Handle {
         &self,
         pkgs: &'a [S],
         f: F,
-    ) -> Result<Vec<&'a str>> {
+    ) -> Result<Vec<String>> {
+        let repos = pkgs
+            .iter()
+            .map(|p| {
+                let mut url = self.aur_url.clone();
+                url.set_path(p.as_ref());
+                Repo {
+                    url,
+                    name: p.as_ref().to_string(),
+                }
+            })
+            .collect::<Vec<_>>();
+        self.download_repos_cb(&repos, f)
+    }
+
+    /// The same as [`download`](fn.download.html) but downloads a specified list of repos instead of AUR packages.
+    pub fn download_repos<F: Fn(Callback)>(&self, repos: &[Repo]) -> Result<Vec<String>> {
+        self.download_repos_cb(repos, |_| ())
+    }
+
+    /// The same as [`download_repos`](fn.download_repos.html) but calls a Callback after each download.
+    ///
+    /// The callback is called each time a package download is completed.
+    pub fn download_repos_cb<F: Fn(Callback)>(&self, repos: &[Repo], f: F) -> Result<Vec<String>> {
         let (pkg_send, pkg_rec) = channel::bounded(0);
         let (fetched_send, fetched_rec) = channel::bounded(32);
         let f = &f;
         let stop = &AtomicBool::new(false);
-        let mut fetched = Vec::with_capacity(pkgs.len());
+        let mut fetched = Vec::with_capacity(repos.len());
 
         crossbeam::thread::scope(|scope| {
             scope.spawn(move |_| {
-                for pkg in pkgs {
-                    if pkg_send.send(pkg.as_ref()).is_err() {
+                for repo in repos {
+                    if pkg_send.send(repo).is_err() {
                         break;
                     }
                 }
             });
 
-            for _ in 0..20.min(pkgs.len()) {
+            for _ in 0..20.min(repos.len()) {
                 let fetched_send = fetched_send.clone();
                 let pkg_rec = pkg_rec.clone();
                 scope.spawn(move |_| {
-                    for pkg in &pkg_rec {
+                    for repo in &pkg_rec {
                         if stop.load(Ordering::Acquire) {
                             break;
                         }
-                        match self.download_pkg(pkg) {
+                        match self.download_pkg(&repo.url, &repo.name) {
                             Ok((fetched, out)) => {
-                                let _ = fetched_send.send(Ok((pkg, fetched, out)));
+                                let _ = fetched_send.send(Ok((repo.name.clone(), fetched, out)));
                             }
                             Err(e) => {
                                 stop.store(true, Ordering::Release);
@@ -163,7 +194,7 @@ impl Handle {
             for (n, msg) in fetched_rec.into_iter().enumerate() {
                 let (pkg, was_fetched, out) = msg?;
                 f(Callback {
-                    pkg,
+                    pkg: &pkg,
                     n: n + 1,
                     output: String::from_utf8_lossy(&out).trim(),
                 });
@@ -177,24 +208,21 @@ impl Handle {
         .unwrap()
     }
 
-    fn download_pkg<S: AsRef<str>>(&self, pkg: S) -> Result<(bool, Vec<u8>)> {
+    fn download_pkg<S: AsRef<str>>(&self, url: &Url, dir: S) -> Result<(bool, Vec<u8>)> {
         self.mk_clone_dir()?;
 
-        let mut url = self.aur_url.clone();
-        let pkg = pkg.as_ref();
-        url.set_path(pkg.as_ref());
-
-        let is_git_repo = self.is_git_repo(pkg);
+        let dir = dir.as_ref();
+        let is_git_repo = self.is_git_repo(dir);
 
         let mut command = Command::new(&self.git);
 
         let fetched = if is_git_repo {
-            command.current_dir(&self.clone_dir.join(pkg));
+            command.current_dir(&self.clone_dir.join(dir));
             command.args(&["fetch", "-v"]);
             true
         } else {
             command.current_dir(&self.clone_dir);
-            command.args(&["clone", "--no-progress", "--", url.as_str()]);
+            command.args(&["clone", "--no-progress", "--", url.as_str(), dir]);
             false
         };
         log_cmd(&command);
