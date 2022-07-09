@@ -14,7 +14,7 @@
 //! ## Printing - Diffs
 //!
 //! ```no_run
-//! use aur_fetch::Handle;
+//! use aur_fetch::Fetch;
 //!
 //! # use aur_fetch::Error;
 //! # async fn foo() -> Result<(), Error> {
@@ -22,7 +22,7 @@
 //! let pkgs = vec!["discord", "spotify", "pacman-git"];
 //!
 //! // Create our handle
-//! let fetch = Handle::new()?;
+//! let fetch = Fetch::new()?;
 //!
 //! // Clone/Fetch the packages.
 //! let fetched = fetch.download(&pkgs)?;
@@ -45,7 +45,7 @@
 //!
 //! ## Diff View
 //! ```no_run
-//! use aur_fetch::Handle;
+//! use aur_fetch::Fetch;
 //! use std::process::Command;
 //!
 //! # use aur_fetch::Error;
@@ -54,7 +54,7 @@
 //! let pkgs = vec!["discord", "spotify", "pacman-git"];
 //!
 //! // Create our handle
-//! let fetch = Handle::new()?;
+//! let fetch = Fetch::new()?;
 //!
 //! // Clone/Fetch the packages.
 //! let fetched = fetch.download(&pkgs)?;
@@ -76,7 +76,7 @@
 //! ## Using a Callback
 //!
 //! ```no_run
-//! use aur_fetch::Handle;
+//! use aur_fetch::Fetch;
 //!
 //! # use aur_fetch::Error;
 //! # async fn foo() -> Result<(), Error> {
@@ -84,7 +84,7 @@
 //! let pkgs = vec!["discord", "spotify", "pacman-git"];
 //!
 //! // Create our handle
-//! let fetch = Handle::new()?;
+//! let fetch = Fetch::new()?;
 //!
 //! // Clone/Fetch the packages.
 //! let feteched = fetch.download(&pkgs)?;

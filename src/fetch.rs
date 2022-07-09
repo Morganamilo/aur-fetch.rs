@@ -30,7 +30,7 @@ pub struct Repo {
 /// This handle is used to configure parts of the fetching process. All the features of this crate
 /// must be done through this handle.
 #[derive(Clone, Debug)]
-pub struct Handle {
+pub struct Fetch {
     /// The directory to place AUR packages in.
     pub clone_dir: PathBuf,
     /// The directory to place diffs in.
@@ -55,7 +55,7 @@ fn command_err(cmd: &Command, stderr: String) -> Error {
     })
 }
 
-impl Handle {
+impl Fetch {
     /// Create a new Handle with working defaults.
     ///
     /// This Inializes the clone and diff dir to the current dirrectory. If you want to configure
@@ -451,7 +451,8 @@ impl Handle {
         Ok(())
     }
 
-    fn is_git_repo<S: AsRef<str>>(&self, pkg: S) -> bool {
+    /// Check if a package is already cloned.
+    pub fn is_git_repo<S: AsRef<str>>(&self, pkg: S) -> bool {
         self.clone_dir.join(pkg.as_ref()).join(".git").is_dir()
     }
 

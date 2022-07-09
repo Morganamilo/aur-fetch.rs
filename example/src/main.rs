@@ -1,4 +1,4 @@
-use aur_fetch::{Error, Handle};
+use aur_fetch::{Error, Fetch};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
 
@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Error> {
-    let h = Handle::new()?;
+    let h = Fetch::new()?;
     let args = env::args();
     let pkgs = args.skip(1).collect::<Vec<_>>();
 
