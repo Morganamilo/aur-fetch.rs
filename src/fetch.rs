@@ -376,7 +376,7 @@ impl Fetch {
             let pkg = format!("{}.diff", pkg.as_ref());
             let dest = dir.join(&pkg);
             let src = self.diff_dir.join(&pkg);
-            if src.is_file() {
+            if src.is_file() && !dest.exists() {
                 symlink(src, &dest)?;
             }
         }
@@ -387,17 +387,17 @@ impl Fetch {
             let srcinfo_dest = dir.join(format!("{}.SRCINFO", pkg.as_ref()));
 
             let src = self.clone_dir.join(pkg.as_ref());
-            if src.is_dir() {
+            if src.is_dir() && !dest.exists() {
                 symlink(src, &dest)?;
             }
 
             let src = self.clone_dir.join(pkg.as_ref()).join("PKGBUILD");
-            if src.is_file() {
+            if src.is_file() && !pkgbuild_dest.exists() {
                 symlink(src, &pkgbuild_dest)?;
             }
 
             let src = self.clone_dir.join(pkg.as_ref()).join(".SRCINFO");
-            if src.is_file() {
+            if src.is_file() && !srcinfo_dest.exists() {
                 symlink(src, &srcinfo_dest)?;
             }
         }
