@@ -43,7 +43,7 @@ pub struct Fetch {
     pub aur_url: Url,
 }
 
-fn command_err(cmd: &Command, stderr: String) -> Error {
+fn command_err(cmd: &Command, stderr: Option<String>) -> Error {
     Error::CommandFailed(CommandFailed {
         dir: cmd.get_current_dir().unwrap().to_owned(),
         command: cmd.get_program().to_owned().into(),
@@ -51,7 +51,7 @@ fn command_err(cmd: &Command, stderr: String) -> Error {
             .get_args()
             .map(|s| s.to_string_lossy().into_owned())
             .collect(),
-        stderr: Some(stderr),
+        stderr,
     })
 }
 
@@ -123,9 +123,9 @@ impl Fetch {
     /// The same as [`download`](fn.download.html) but calls a Callback after each download.
     ///
     /// The callback is called each time a package download is completed.
-    pub fn download_cb<'a, S: AsRef<str> + Send + Sync, F: Fn(Callback)>(
+    pub fn download_cb<S: AsRef<str> + Send + Sync, F: Fn(Callback)>(
         &self,
-        pkgs: &'a [S],
+        pkgs: &[S],
         f: F,
     ) -> Result<Vec<String>> {
         let repos = pkgs
@@ -218,22 +218,22 @@ impl Fetch {
 
         let fetched = if is_git_repo {
             command.current_dir(&self.clone_dir.join(dir));
-            command.args(&["fetch", "-v"]);
+            command.args(["fetch", "-v"]);
             true
         } else {
             command.current_dir(&self.clone_dir);
-            command.args(&["clone", "--no-progress", "--", url.as_str(), dir]);
+            command.args(["clone", "--no-progress", "--", url.as_str(), dir]);
             false
         };
         log_cmd(&command);
         let output = command
             .output()
-            .map_err(|e| command_err(&command, e.to_string()))?;
+            .map_err(|e| command_err(&command, Some(e.to_string())))?;
 
         if !output.status.success() {
             return Err(command_err(
                 &command,
-                String::from_utf8_lossy(&output.stderr).into_owned(),
+                Some(String::from_utf8_lossy(&output.stderr).into_owned()),
             ));
         }
 
@@ -377,7 +377,7 @@ impl Fetch {
             let dest = dir.join(&pkg);
             let src = self.diff_dir.join(&pkg);
             if src.is_file() {
-                symlink(src, &dest)?;
+                symlink(src, dest)?;
             }
         }
 
@@ -388,17 +388,17 @@ impl Fetch {
 
             let src = self.clone_dir.join(pkg.as_ref());
             if src.is_dir() {
-                symlink(src, &dest)?;
+                symlink(src, dest)?;
             }
 
             let src = self.clone_dir.join(pkg.as_ref()).join("PKGBUILD");
             if src.is_file() {
-                symlink(src, &pkgbuild_dest)?;
+                symlink(src, pkgbuild_dest)?;
             }
 
             let src = self.clone_dir.join(pkg.as_ref()).join(".SRCINFO");
             if src.is_file() {
-                symlink(src, &srcinfo_dest)?;
+                symlink(src, srcinfo_dest)?;
             }
         }
 
@@ -492,12 +492,10 @@ fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
     if output.status.success() {
         Ok(output)
     } else {
-        Err(Error::CommandFailed(CommandFailed {
-            dir: path.as_ref().into(),
-            command: git.as_ref().into(),
-            args: args.iter().map(|s| s.to_string()).collect(),
-            stderr: Some(String::from_utf8_lossy(&output.stderr).into()),
-        }))
+        Err(command_err(
+            &command,
+            Some(String::from_utf8_lossy(&output.stderr).into()),
+        ))
     }
 }
 
@@ -520,12 +518,7 @@ fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
     if status.success() {
         Ok(())
     } else {
-        Err(Error::CommandFailed(CommandFailed {
-            dir: path.as_ref().into(),
-            command: git.as_ref().into(),
-            args: args.iter().map(|s| s.to_string()).collect(),
-            stderr: None,
-        }))
+        Err(command_err(&command, None))
     }
 }
 
