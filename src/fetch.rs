@@ -486,7 +486,9 @@ fn git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
         .env("GIT_TERMINAL_PROMPT", "0");
 
     log_cmd(&command);
-    let output = command.output()?;
+    let output = command
+        .output()
+        .map_err(|e| command_err(&command, Some(e.to_string())))?;
 
     if output.status.success() {
         Ok(output)
@@ -512,7 +514,11 @@ fn show_git_command<S: AsRef<OsStr>, P: AsRef<Path>>(
         .env("GIT_TERMINAL_PROMPT", "0");
 
     log_cmd(&command);
-    let status = command.spawn()?.wait()?;
+    let status = command
+        .spawn()
+        .map_err(|e| command_err(&command, Some(e.to_string())))?
+        .wait()
+        .map_err(|e| command_err(&command, Some(e.to_string())))?;
 
     if status.success() {
         Ok(())
