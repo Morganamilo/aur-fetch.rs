@@ -157,8 +157,8 @@ impl Fetch {
         let stop = &AtomicBool::new(false);
         let mut fetched = Vec::with_capacity(repos.len());
 
-        crossbeam::thread::scope(|scope| {
-            scope.spawn(move |_| {
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
                 for repo in repos {
                     if pkg_send.send(repo).is_err() {
                         break;
@@ -169,7 +169,7 @@ impl Fetch {
             for _ in 0..20.min(repos.len()) {
                 let fetched_send = fetched_send.clone();
                 let pkg_rec = pkg_rec.clone();
-                scope.spawn(move |_| {
+                scope.spawn(move || {
                     for repo in &pkg_rec {
                         if stop.load(Ordering::Acquire) {
                             break;
@@ -205,7 +205,6 @@ impl Fetch {
 
             Ok(fetched)
         })
-        .unwrap()
     }
 
     fn download_pkg<S: AsRef<str>>(&self, url: &Url, dir: S) -> Result<(bool, Vec<u8>)> {
