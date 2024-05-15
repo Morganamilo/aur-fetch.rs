@@ -1,3 +1,4 @@
+
 use crate::{Callback, CommandFailed, Error};
 
 use std::env::{self, current_dir};
@@ -415,11 +416,15 @@ impl Fetch {
 
         for (n, pkg) in pkgs.enumerate() {
             let path = self.clone_dir.join(pkg.as_ref());
-            let output = git_rebase(&self.git, &self.git_flags, path)?;
+            let output = if git_can_rebase(&self.git, &self.git_flags, path.clone())? {
+                git_rebase(&self.git, &self.git_flags, path)?.stdout
+            } else {
+                Vec::new()
+            };
             cb(Callback {
                 pkg: pkg.as_ref(),
                 n,
-                output: String::from_utf8_lossy(&output.stdout).trim(),
+                output: String::from_utf8_lossy(&output).trim(),
             });
         }
 
@@ -533,6 +538,20 @@ fn git_mark_seen<S: AsRef<OsStr>, P: AsRef<Path>>(
     path: P,
 ) -> Result<Output> {
     git_command(&git, &path, flags, &["update-ref", SEEN, "HEAD"])
+}
+
+fn git_can_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(
+    git: S,
+    flags: &[String],
+    path: P,
+) -> Result<bool> {
+    match git_command(&git, &path, flags, &["branch", "--show-current"]) {
+        Ok(output) => {
+            let s = String::from_utf8_lossy(&output.stdout);
+            Ok(s.trim() != "")
+        }
+        Err(x) => Err(x),
+    }
 }
 
 fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(
