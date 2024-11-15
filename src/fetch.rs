@@ -541,6 +541,9 @@ fn git_rebase<S: AsRef<OsStr>, P: AsRef<Path>>(
     path: P,
 ) -> Result<Output> {
     git_command(&git, &path, flags, &["reset", "--hard", "-q", "HEAD"])?;
+    if git_command(&git, &path, flags, &["symbolic-ref", "-q", "HEAD"]).is_err() {
+        git_command(&git, &path, flags, &["checkout", "master"])?;
+    }
     git_command(&git, &path, flags, &["rebase", "--stat"])
 }
 
