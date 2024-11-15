@@ -12,6 +12,6 @@ license = "GPL-3.0"
 keywords = ["archlinux", "pkgbuild", "arch", "aur"]
 
 [dependencies]
-url = "2.3.1"
-crossbeam = "0.8.2"
-log = "0.4.17"
+url = "2.5.3"
+crossbeam = "0.8.4"
+log = "0.4.22"
