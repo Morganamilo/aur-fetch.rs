@@ -216,7 +216,7 @@ impl Fetch {
         let mut command = Command::new(&self.git);
 
         let fetched = if is_git_repo {
-            command.current_dir(&self.clone_dir.join(dir));
+            command.current_dir(self.clone_dir.join(dir));
             command.args(["fetch", "-v"]);
             true
         } else {
@@ -342,7 +342,7 @@ impl Fetch {
                 )?
                 .stdout,
             )?;
-            file.write_all(&[b'\n'])?;
+            file.write_all(b"\n")?;
             file.write_all(
                 &git_diff(
                     &self.git,
